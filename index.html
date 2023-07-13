@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Annotation Form</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+      .error-message {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Annotation Form</h1>
+    <table>
+      <caption>
+        랜덤 상황 데이터
+      </caption>
+      <tr>
+        <th>touchcare_place</th>
+        <th>weather</th>
+        <th>time</th>
+        <th>temperature</th>
+        <th>airpressure</th>
+        <th>touchcare_many</th>
+        <th>선택 (위 테이블)</th>
+      </tr>
+      <tr>
+        <td id="touchcare_place">{{ values['touchcare_place'] }}</td>
+        <td id="weather">{{ values['weather'] }}</td>
+        <td id="time">{{ values['time'] }}</td>
+        <td id="temperature">{{ values['temperature'] }}</td>
+        <td id="airpressure">{{ values['airpressure'] }}</td>
+        <td id="touchcare_many">{{ values['touchcare_many'] }}</td>
+        <td><input type="checkbox" class="checkbox" data-table="above" /></td>
+      </tr>
+    </table>
+    <button id="refresh-btn">값 새로고침</button>
+    <br /><br />
+    <table>
+      <caption>
+        현재 상황 데이터
+      </caption>
+      <tr>
+        <th>touchcare_place</th>
+        <th>weather</th>
+        <th>time</th>
+        <th>temperature</th>
+        <th>airpressure</th>
+        <th>touchcare_many</th>
+        <th>선택 (아래 테이블)</th>
+      </tr>
+      <tr>
+        <td id="current-touchcare_place">{{ values['touchcare_place'] }}</td>
+        <td id="current-weather"></td>
+        <td id="current-time"></td>
+        <td id="current-temperature"></td>
+        <td id="current-airpressure"></td>
+        <td id="current-touchcare_many">{{ values['touchcare_many'] }}</td>
+        <td><input type="checkbox" class="checkbox" data-table="below" /></td>
+      </tr>
+    </table>
+    <br /><br />
+    <form id="annotation-form">
+      <label for="message">메세지 입력:</label>
+      <input type="text" name="message" id="message" />
+      <input type="hidden" name="checkbox_table" id="checkbox-table" />
+      <input type="submit" value="Submit" />
+    </form>
+    <br /><br />
+    <div id="submitted-data"></div>
+    <div id="submit-message"></div>
+
+    <script>
+      $(document).ready(function () {
+        // 초기 데이터 표시
+        showCurrentWeather();
+
+        // 값 새로고침 버튼 클릭 시 AJAX 호출
+        $('#refresh-btn').click(function () {
+          refreshValues();
+          showCurrentWeather();
+        });
+
+        // 양식 제출 이벤트 핸들러
+        $('#annotation-form').submit(function (event) {
+          event.preventDefault(); // 기본 제출 동작 막기
+
+          var message = $('#message').val(); // 입력된 메세지 가져오기
+          var checkedCheckbox = $('.checkbox:checked'); // 선택된 체크박스 가져오기
+
+          if (checkedCheckbox.length === 1) {
+            var table = checkedCheckbox.data('table'); // 체크된 체크박스의 테이블 가져오기
+
+            // API 호출하여 데이터 전송
+            $.ajax({
+              url: '/api/save_annotations',
+              type: 'POST',
+              data: {
+                touchcare_place:
+                  table === 'above'
+                    ? $('#touchcare_place').text()
+                    : $('#current-touchcare_place').text(),
+                weather:
+                  table === 'above'
+                    ? $('#weather').text()
+                    : $('#current-weather').text(),
+                time:
+                  table === 'above'
+                    ? $('#time').text()
+                    : $('#current-time').text().split(':')[0],
+                temperature:
+                  table === 'above'
+                    ? $('#temperature').text()
+                    : $('#current-temperature').text(),
+                airpressure:
+                  table === 'above'
+                    ? $('#airpressure').text()
+                    : $('#current-airpressure').text(),
+                touchcare_many:
+                  table === 'above'
+                    ? $('#touchcare_many').text()
+                    : $('#current-touchcare_many').text(),
+                message: message,
+              },
+              success: function (response) {
+                console.log('Annotation saved successfully');
+
+                // 저장된 데이터를 화면에 표시
+                var submittedData = $('#submitted-data');
+                submittedData.text(
+                  'Submitted Data: ' + JSON.stringify(response)
+                );
+
+                // 저장 완료 메시지를 화면에 표시
+                var submitMessage = $('#submit-message');
+                submitMessage.text('저장 완료');
+                submitMessage.removeClass('error-message');
+              },
+              error: function (xhr, status, error) {
+                console.error(error);
+
+                // 저장 실패 메시지를 화면에 표시
+                var submitMessage = $('#submit-message');
+                submitMessage.text('저장 실패');
+                submitMessage.addClass('error-message');
+              },
+            });
+          } else {
+            console.error('Please select one checkbox.');
+
+            // 체크박스 선택 메시지를 화면에 표시
+            var submitMessage = $('#submit-message');
+            submitMessage.text('체크박스를 선택해주세요.');
+            submitMessage.addClass('error-message');
+          }
+        });
+
+        // 체크박스 클릭 시 다른 체크박스의 선택 해제
+        $('.checkbox').click(function () {
+          var currentTable = $(this).data('table');
+          $('.checkbox').prop('checked', false);
+          $(this).prop('checked', true);
+          $('#checkbox-table').val(currentTable);
+        });
+      });
+
+      // 값 새로고침 함수
+      function refreshValues() {
+        $.ajax({
+          url: '/api/refresh_values',
+          type: 'GET',
+          success: function (response) {
+            // 서버로부터 받은 JSON 데이터로 테이블 업데이트
+            $('#touchcare_place').text(response.touchcare_place);
+            $('#weather').text(response.weather);
+            $('#time').text(response.time);
+            $('#temperature').text(response.temperature);
+            $('#airpressure').text(response.airpressure);
+            $('#touchcare_many').text(response.touchcare_many);
+          },
+          error: function (xhr, status, error) {
+            console.error(error);
+          },
+        });
+      }
+
+      function showCurrentWeather() {
+        $.ajax({
+          url: 'https://api.openweathermap.org/data/3.0/onecall?lat=43&lon=141&units=metric&lang=kr&exclude=minutely,hourly,daily&appid=c8c4a39fee42522c6f3169616867d38b',
+          type: 'GET',
+          success: function (response) {
+            // 서버로부터 받은 현재 날씨 데이터로 테이블 업데이트
+            $('#current-touchcare_place').text(
+              '{{ values["touchcare_place"] }}'
+            );
+            $('#current-weather').text(response.current.weather[0].description);
+            var currentTime = new Date().getHours();
+            $('#current-time').text(currentTime);
+            $('#current-temperature').text(response.current.temp);
+            $('#current-airpressure').text(response.current.pressure);
+            $('#current-touchcare_many').text('{{ values["touchcare_many"] }}');
+          },
+          error: function (xhr, status, error) {
+            console.error(error);
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
